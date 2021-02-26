@@ -1,4 +1,4 @@
-#include <float.h>
+nclude <float.h>
 #include <math.h>
 
 #include "FreeRTOS.h"
@@ -66,6 +66,8 @@ static float trajecory_center_offset_x = 0.0f;
 static float trajecory_center_offset_y = 0.0f;
 static float trajecory_center_offset_z = 0.0f;
 
+static uint8_t dronicle_index = 0;          // 0 is default, and not addressed. windpipe
+
 static uint32_t now = 0;
 static uint32_t flightTime = 0;
 
@@ -103,6 +105,7 @@ enum State {
   STATE_WAITING_TO_GO_TO_INITIAL_POSITION,
   STATE_GOING_TO_INITIAL_POSITION,
   STATE_RUNNING_TRAJECTORY,
+  STATE_RUNNING_LETTER, // windpipe, instead of STATE_RUNNING_TRAJECTORY
   STATE_GOING_TO_PAD,
   STATE_WAITING_AT_PAD,
   STATE_LANDING,
@@ -115,7 +118,7 @@ static enum State state = STATE_IDLE;
 
 ledseqStep_t seq_lock_def[] = {
   { true, LEDSEQ_WAITMS(1000)},
-  {    0, LEDSEQ_LOOP},
+  {    0, LEDSEQ_LOOP},     // ledseq.h ( hal interface ) windpipe
 };
 
 ledseqContext_t seq_lock = {
@@ -180,26 +183,36 @@ const baseStationGeometry_t lighthouseGeoData[PULSE_PROCESSOR_N_BASE_STATIONS]  
 
 lighthouseCalibration_t lighthouseCalibrationData[PULSE_PROCESSOR_N_BASE_STATIONS] = {
   { // Base station 0
-    .sweep = {
-      {.tilt = -0.047353, .phase = 0.000000, .curve = 0.478887, .gibphase = 1.023093, .gibmag = 0.005071, .ogeephase = 1.136886, .ogeemag = -0.520102, },
-      {.tilt = 0.049104, .phase = -0.006642, .curve = 0.675827, .gibphase = 2.367835, .gibmag = 0.004907, .ogeephase = 1.900456, .ogeemag = -0.457289, },
-    },
-    .uid = 0x3C65D22F,
     .valid = true,
+    .sweep = {
+      {.tilt = -0.047058, .phase = 0.0, .curve = 0.052215, .gibphase = 2.087890, .gibmag = -0.003913, .ogeephase = 0.433105, .ogeemag = -0.049285},
+      {.tilt = 0.048065, .phase = -0.005336, .curve = 0.122375, .gibphase = 2.097656, .gibmag = -0.003883, .ogeephase = 0.631835, .ogeemag = -0.034851},
+    },
   },
   { // Base station 1
-    .sweep = {
-      {.tilt = -0.048959, .phase = 0.000000, .curve = 0.144913, .gibphase = 1.288635, .gibmag = -0.005397, .ogeephase = 2.004001, .ogeemag = 0.033096, },
-      {.tilt = 0.047509, .phase = -0.004676, .curve = 0.374379, .gibphase = 1.727613, .gibmag = -0.005642, .ogeephase = 2.586835, .ogeemag = 0.117884, },
-    },
-    .uid = 0x34C2AD7E,
     .valid = true,
+    .sweep = {
+      {.tilt = -0.051208, .phase = 0.0, .curve = 0.011756, .gibphase = 2.136718, .gibmag = -0.006057, .ogeephase = 2.705078,},
+      {.tilt = 0.045623, .phase = -0.004142, .curve = 0.104736, .gibphase = 2.349609, .gibmag = -0.003332, .ogeephase = 0.380859, .ogeemag = -0.240112,},
+    },
   },
 };
 
+// windpipe
+void dr_hrRotate( float* new_x, float* new_y, float tx, float ty, float thetha )
+{
+  float cosq = cos(q);
+  float sinq = sin(q);
+
+  *new_x = tx * cosq - ty * sinq;
+  *new_y = ty * cosq + tx * sinq;
+
+}
+
 #ifdef USE_MELLINGER
-static void enableMellingerController() { paramSetInt(paramIdStabilizerController, ControllerTypeMellinger); }
+// static void enableMellingerController() { paramSetInt(paramIdStabilizerController, ControllerTypeMellinger); }
 #endif
+
 static void enableHighlevelCommander() { paramSetInt(paramIdCommanderEnHighLevel, 1); }
 static void useCrossingBeamPositioningMethod() { paramSetInt(paramIdLighthouseMethod, 0); }
 
@@ -247,13 +260,13 @@ void appMain() {
   paramIdLighthouseMethod = paramGetVarId("lighthouse", "method");
 
 
-  timer = xTimerCreate("AppTimer", M2T(20), pdTRUE, NULL, appTimer);
-  xTimerStart(timer, 20);
+  ///timer = xTimerCreate("AppTimer", M2T(20), pdTRUE, NULL, appTimer);
+  ///xTimerStart(timer, 20);
 
-  pinMode(DECK_GPIO_IO3, INPUT_PULLUP);
+  ////pinMode(DECK_GPIO_IO3, INPUT_PULLUP);
 
   #ifdef USE_MELLINGER
-    enableMellingerController();
+    ////enableMellingerController();
   #endif
 
   setupLighthouse();
@@ -263,7 +276,14 @@ void appMain() {
   resetLockData();
 
   isInit = true;
+
 }
+
+bool iotaPatternPlayIsFinished()
+{
+    return true;
+}
+
 
 static void appTimer(xTimerHandle timer) {
   uint32_t previous = now;
@@ -307,7 +327,8 @@ static void appTimer(xTimerHandle timer) {
       }
       break;
     case STATE_TAKING_OFF:
-      if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      //if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      if ( iotaPatternPlayIsFinished())
         DEBUG_PRINT("Hovering, waiting for command to start\n");
         ledseqStop(&seq_lock);
         state = STATE_HOVERING;
@@ -316,12 +337,12 @@ static void appTimer(xTimerHandle timer) {
       flightTime += delta;
       break;
     case STATE_HOVERING:
-      if (terminateTrajectoryAndLand) {
+      if (terminateTrajectoryAndLand) {    // 끝내야 되면, 패드로 가라.
           terminateTrajectoryAndLand = false;
           DEBUG_PRINT("Terminating hovering\n");
           state = STATE_GOING_TO_PAD;
       } else {
-        if (goToInitialPositionWhenReady >= 0.0f) {
+        if (goToInitialPositionWhenReady >= 0.0f) {    // ???? 분석 요망.
           float delayMs = goToInitialPositionWhenReady * trajectoryDurationMs;
           timeWhenToGoToInitialPosition = now + delayMs;
           trajectoryStartTime = now + delayMs;
@@ -340,18 +361,19 @@ static void appTimer(xTimerHandle timer) {
       }
       flightTime += delta;
       break;
-    case STATE_GOING_TO_INITIAL_POSITION:
+    case STATE_GOING_TO_INITIAL_POSITION: // windpipe, trajectory에 관한것 살펴봐야함, trajectory time 포함.
       currentProgressInTrajectory = (now - trajectoryStartTime) / trajectoryDurationMs;
 
       if (crtpCommanderHighLevelIsTrajectoryFinished()) {
         DEBUG_PRINT("At initial position, starting trajectory...\n");
         crtpCommanderHighLevelStartTrajectory(trajectoryId, SEQUENCE_SPEED, true, false);
         remainingTrajectories = trajectoryCount - 1;
-        state = STATE_RUNNING_TRAJECTORY;
+        state = STATE_RUNNING_LETTER; // STATE_RUNNING_TRAJECTORY;
       }
       flightTime += delta;
       break;
-    case STATE_RUNNING_TRAJECTORY:
+
+    case STATE_RUNNING_TRAJECTORY: // windpipe , trajectory는 안씀.
       currentProgressInTrajectory = (now - trajectoryStartTime) / trajectoryDurationMs;
 
       if (crtpCommanderHighLevelIsTrajectoryFinished()) {
@@ -372,15 +394,41 @@ static void appTimer(xTimerHandle timer) {
       }
       flightTime += delta;
       break;
+
+    case STATE_RUNNING_LETTER: // windpipe , actually state_running 글자를 만들자.
+      currentProgressInTrajectory = (now - trajectoryStartTime) / trajectoryDurationMs;   // 현재 수행해야되는 부분 계산
+
+      //if (crtpCommanderHighLevelIsTrajectoryFinished()) {  // api이니까 letter에 관한것을 만들어서 대체
+      if ( isRunningFinished() ) {     // 함수 만들어야함. 다하면 이 주석 고침.
+        if (terminateTrajectoryAndLand ) { // || (remainingTrajectories == 0)) { // 착륙 조건    , terminateTrajectoryAndLand 는 BatteryLow의 의미
+          terminateTrajectoryAndLand = false;
+          DEBUG_PRINT("Terminating trajectory, going to pad...\n");
+          float timeToPadPosition = 2.0;
+          crtpCommanderHighLevelGoTo(padX, padY, padZ + LANDING_HEIGHT, 0.0, timeToPadPosition, false); // 착륙 위치로 이동
+          currentProgressInTrajectory = NO_PROGRESS; // 트래젝터리는.... 진행하지 않음으로.
+          state = STATE_GOING_TO_PAD;
+        } else {        // 트레젝터리가 끝났지만 반복회수가 남았을때.
+          if (remainingTrajectories > 0) {
+            DEBUG_PRINT("Trajectory finished, restarting...\n");
+            //crtpCommanderHighLevelStartTrajectory(trajectoryId, SEQUENCE_SPEED, true, false);
+            //
+          }
+          remainingTrajectories--;
+        }
+      }
+      flightTime += delta;
+      break;
+
     case STATE_GOING_TO_PAD:
-      if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      //if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      if ( isRunningFinished() ) {
         DEBUG_PRINT("Over pad, stabalizing position\n");
         stabilizeEndTime = now + 5000;
         state = STATE_WAITING_AT_PAD;
       }
       flightTime += delta;
       break;
-    case STATE_WAITING_AT_PAD:
+    case STATE_WAITING_AT_PAD:  // 패드 위에서 대기.
       if (now > stabilizeEndTime || ((fabs(padX - getX()) < MAX_PAD_ERR) && (fabs(padY - getY()) < MAX_PAD_ERR))) {
         if (now > stabilizeEndTime) {
           DEBUG_PRINT("Warning: timeout!\n");
@@ -393,15 +441,18 @@ static void appTimer(xTimerHandle timer) {
       flightTime += delta;
       break;
     case STATE_LANDING:
-      if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      ////if (crtpCommanderHighLevelIsTrajectoryFinished())
+      {
         DEBUG_PRINT("Landed. Feed me!\n");
-        crtpCommanderHighLevelStop();
+        crtpCommanderHighLevelStop();   // 끝.
         landingTimeCheckCharge = now + 3000;
-        state = STATE_CHECK_CHARGING;
+        //state = STATE_CHECK_CHARGING;
       }
       flightTime += delta;
       break;
-    case STATE_CHECK_CHARGING:
+
+/*
+    case STATE_CHECK_CHARGING: // 일단 차징은 안하는 걸로.
       if (now > landingTimeCheckCharge) {
         DEBUG_PRINT("isCharging: %d\n", isCharging());
         if (isCharging()) {
@@ -410,7 +461,9 @@ static void appTimer(xTimerHandle timer) {
         } else {
           DEBUG_PRINT("Not charging. Try to reposition on pad.\n");
           crtpCommanderHighLevelTakeoff(padZ + LANDING_HEIGHT, 1.0);
-          state = STATE_REPOSITION_ON_PAD;
+          //state = STATE_REPOSITION_ON_PAD;
+          // 차징을 안하므로
+
         }
       }
       break;
@@ -422,6 +475,8 @@ static void appTimer(xTimerHandle timer) {
       }
       flightTime += delta;
       break;
+      */
+
     case STATE_CRASHED:
       crtpCommanderHighLevelStop();
       break;
@@ -429,6 +484,7 @@ static void appTimer(xTimerHandle timer) {
       break;
   }
 }
+
 
 
 static bool hasLock() {
@@ -496,6 +552,7 @@ PARAM_GROUP_START(app)
   PARAM_ADD(PARAM_FLOAT, offsx, &trajecory_center_offset_x)
   PARAM_ADD(PARAM_FLOAT, offsy, &trajecory_center_offset_y)
   PARAM_ADD(PARAM_FLOAT, offsz, &trajecory_center_offset_z)
+  PARAM_ADD(PARAM_UINT8, dindex, &dronicle_index )          // windpipe.
   PARAM_ADD(PARAM_UINT8, trajcount, &trajectoryCount)
 PARAM_GROUP_STOP(app)
 
