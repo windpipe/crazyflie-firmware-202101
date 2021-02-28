@@ -34,6 +34,7 @@ import math
 
 import zmq
 
+
 class TrafficController:
     CS_DISCONNECTED = 0
     CS_CONNECTING = 1
@@ -63,7 +64,7 @@ class TrafficController:
         self.uri = uri
         self.stay_alive = True
         self.reset_internal()
-        self.connection_thread = threading.Thread(target=self.process)
+        self.connection_thread = threading.Thread(target=self.process) # 커넥션 제어 쓰레드
         self.connection_thread.start()
 
     def reset_internal(self):
@@ -155,7 +156,7 @@ class TrafficController:
     def get_traj_cycles(self):
         return self.traj_cycles
 
-    def process(self):
+    def process(self):                  # 커넥션 제어...굳
         while self.stay_alive:
             if self.connection_state == self.CS_DISCONNECTED:
                 if time.time() > self._time_for_next_connection_attempt:
@@ -351,7 +352,7 @@ class Tower(TowerBase):
         TowerBase.__init__(self, uris, report_socket)
 
     def fly(self, wanted):
-         # Wait for all CF to connect (to avoid race)
+        # Wait for all CF to connect (to avoid race)
         time.sleep(10)
 
         while True:
@@ -457,24 +458,23 @@ class SyncTower(TowerBase):
 
         master_offset = [0, 0]
         self._start_position = [
-            [   0 + master_offset[0],    0 + master_offset[1], 0],
-            [   0 + master_offset[0],  0.5 + master_offset[1], 0],
-            [   0 + master_offset[0], -0.5 + master_offset[1], 0],
-            [ 0.5 + master_offset[0],    0 + master_offset[1], 0],
-            [-0.5 + master_offset[0],    0 + master_offset[1], 0],
-            [ 0.5 + master_offset[0],  0.5 + master_offset[1], 0],
+            [0 + master_offset[0], 0 + master_offset[1], 0],
+            [0 + master_offset[0], 0.5 + master_offset[1], 0],
+            [0 + master_offset[0], -0.5 + master_offset[1], 0],
+            [0.5 + master_offset[0], 0 + master_offset[1], 0],
+            [-0.5 + master_offset[0], 0 + master_offset[1], 0],
+            [0.5 + master_offset[0], 0.5 + master_offset[1], 0],
             [-0.5 + master_offset[0], -0.5 + master_offset[1], 0],
-            [-0.5 + master_offset[0],  0.5 + master_offset[1], 0],
-            [ 0.5 + master_offset[0], -0.5 + master_offset[1], 0]
+            [-0.5 + master_offset[0], 0.5 + master_offset[1], 0],
+            [0.5 + master_offset[0], -0.5 + master_offset[1], 0]
         ]
 
-
-    def fly(self, wanted):
+    def fly(self, wanted):  # 이것이 메인 루틴 역할을 하게 됨. windpipe
         while True:
             if wanted:
                 best = self.find_best_controllers()
                 ready = list(
-                    filter(lambda ctrlr: ctrlr.has_found_position(), best))
+                    filter(lambda ctrlr: ctrlr.has_found_position(), best)) # 람다식 파악, y = lambda x : fn(x), filter 는 두개의 인자를 가짐.
                 found_count = len(ready)
 
                 if found_count >= wanted:
@@ -542,11 +542,11 @@ class SyncTower(TowerBase):
             return False
 
     def calculate_distance(self, p1, p2):
-        diff = [0,0,0]
-        diff[0] = p1[0]-p2[0]
-        diff[1] = p1[1]-p2[1]
-        diff[2] = p1[2]-p2[2]
-        return math.sqrt( (diff[0]*diff[0]) + (diff[1]*diff[1]) + (diff[2]*diff[2]) )
+        diff = [0, 0, 0]
+        diff[0] = p1[0] - p2[0]
+        diff[1] = p1[1] - p2[1]
+        diff[2] = p1[2] - p2[2]
+        return math.sqrt((diff[0] * diff[0]) + (diff[1] * diff[1]) + (diff[2] * diff[2]))
 
     def find_closest_target(self, start_position, targets_position):
         min_distance = None
@@ -556,22 +556,22 @@ class SyncTower(TowerBase):
             if min_distance is None or dist < min_distance:
                 min_distance = dist
                 closest_index = index
-        
+
         return targets_position[closest_index]
 
     def get_start_offsets(self, start_positions, targets_positions):
         offsets = []
-        target_used = [False,] * len(targets_positions)
+        target_used = [False, ] * len(targets_positions)
         for start in start_positions:
             candidate_targets = []
             for i in range(len(targets_positions)):
                 if not target_used[i]:
                     candidate_targets.append(targets_positions[i])
-            
+
             closest_target = self.find_closest_target(start, candidate_targets)
             target_used[targets_positions.index(closest_target)] = True
             offsets.append(closest_target)
-        
+
         return offsets
 
 
@@ -609,7 +609,7 @@ cflib.crtp.init_drivers(enable_debug_driver=False)
 print('Starting tower with', count, 'Crazyflie(s)')
 if mode == 'synch':
     print('Flying with synchronized trajectories')
-    tower = SyncTower(uris, socket)
+    tower = SyncTower(uris, socket)  # 씽크타워로 테스트
 else:
     print('Flying with interleaved trajectories')
     tower = Tower(uris, socket)
