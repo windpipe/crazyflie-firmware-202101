@@ -276,7 +276,7 @@ class TowerBase:
                 count += 1
         return count
 
-    def find_best_controllers(self):
+    def find_best_controllers(self):    # 이것은 현재 충전하고 있는데, 잘 충전된 것들 골라내는
         too_low_battery = []
 
         charging_controllers = []
