@@ -139,6 +139,18 @@ class TrafficController:
                 self._pre_state_going_to_initial_position_end_time = time.time() + self.PRE_STATE_TIMEOUT
                 self._cf.param.set_value('app.start', trajectory_delay)
 
+    # windpipe... for LED
+    def start_show(self, show_delay, offset_x=0.0, offset_y=0.0, offset_z=0.0):
+        if self.is_ready_for_flight():
+            if self._cf:
+                self._cf.param.set_value('app.offsx', offset_x)
+                self._cf.param.set_value('app.offsy', offset_y)
+                self._cf.param.set_value('app.offsz', offset_z)
+
+                self._pre_state_going_to_initial_position_end_time = time.time() + self.PRE_STATE_TIMEOUT
+                self._cf.param.set_value('app.start', trajectory_delay)
+
+
     def force_land(self):
         if self.connection_state == self.CS_CONNECTED:
             self._cf.param.set_value('app.stop', 1)
@@ -357,7 +369,7 @@ class Tower(TowerBase):
 
         while True:
             # print()
-            if wanted:
+            if wanted:              # wanted, missing 이것은 전부 드론 댓수임.
                 currently_flying = self.flying_count()
                 missing = wanted - currently_flying
                 if missing > 0:
@@ -371,7 +383,7 @@ class Tower(TowerBase):
 
             time.sleep(0.2)
 
-    def prepare_copters(self, count):
+    def prepare_copters(self, count):               # 현재 날지 않고 있는 드론 중에서 가용 드론을 골라서 이륙준비.
         prepared_count = 0
         for controller in self.controllers:
             if controller.is_taking_off() or controller.is_ready_for_flight():
@@ -473,7 +485,7 @@ class SyncTower(TowerBase):
         while True:
             if wanted:
                 best = self.find_best_controllers()
-                ready = list(
+                ready = list(                                               # ctrlr 트래픽콘트롤러임
                     filter(lambda ctrlr: ctrlr.has_found_position(), best)) # 람다식 파악, y = lambda x : fn(x), filter 는 두개의 인자를 가짐.
                 found_count = len(ready)
 
@@ -574,6 +586,93 @@ class SyncTower(TowerBase):
 
         return offsets
 
+class SyncLEDTower(TowerBase):
+    def __init__(self, uris,  report_socket = None):
+        TowerBase.__init__(self, uris, report_socket)
+        self.spacing = 0.40
+        self.line_orientation = math.radians(40)
+        master_offset = [0, 0]
+        self._start_position = [
+            [   0 + master_offset[0],    0 + master_offset[1], 0],
+            [   0 + master_offset[0],  0.5 + master_offset[1], 0],
+            [   0 + master_offset[0], -0.5 + master_offset[1], 0],
+            [ 0.5 + master_offset[0],    0 + master_offset[1], 0],
+            [-0.5 + master_offset[0],    0 + master_offset[1], 0],
+            [ 0.5 + master_offset[0],  0.5 + master_offset[1], 0],
+            [-0.5 + master_offset[0], -0.5 + master_offset[1], 0],
+            [-0.5 + master_offset[0],  0.5 + master_offset[1], 0],
+            [ 0.5 + master_offset[0], -0.5 + master_offset[1], 0]
+        ]
+
+    def fly(self, wanted): # Wait for all CF to connect (to avoid race)
+        time.sleep(10)
+        while True:
+            if wanted:
+                currently_flying = self.flying_count()
+                best = self.find_best_controllers()
+
+            else:
+                self.land_all()
+            
+            self.send_report()
+            time.sleep(10)
+
+    def prepare_copters(self, count, best_controllers):
+        prepared_count = 0
+        for controller in self.controllers:
+            if controller.is_taking_off() or controller.is_ready_for_flight():
+                prepared_count += 1
+
+        missing = count - prepared_count
+        new_prepared_count = 0
+        if missing > 0:
+            print("Trying to prepare", missing, "copter(s)")
+            for best_controller in best_controllers[:missing]:
+                if best_controller:
+                    print("Preparing " + best_controller.uri)
+                    new_prepared_count += 1
+                    best_controller.take_off()
+            print("Prepared", new_prepared_count, "copter(s)")
+
+    def start_copters(self, wanted, best):
+        ready = []
+        for controller in best:
+            if controller.is_ready_for_flight():
+                ready.append(controller)
+
+        if len(ready) >= wanted:
+            ready_positions = []
+            for controller in ready:
+                ready_positions.append([controller.est_x, controller.est_y, controller.est_z])
+
+            offsets = self.get_start_offsets(ready_positions, self._start_position[:wanted])
+
+            index = 0
+            for controller in ready:
+                offset_x = offsets[index][0]
+                offset_y = offsets[index][1]
+                offset_z = offsets[index][2]
+                # controller.start_trajectory(0.0, offset_x=offset_x, offset_y=offset_y, offset_z=offset_z)
+                index += 1
+
+            return True
+        else:
+            return False
+
+    def get_start_offsets(self, start_positions, targets_positions):
+        offsets = []
+        target_used = [False, ] * len(targets_positions)
+        for start in start_positions:
+            candidate_targets = []
+            for i in range(len(targets_positions)):
+                if not target_used[i]:
+                    candidate_targets.append(targets_positions[i])
+
+            closest_target = self.find_closest_target(start, candidate_targets)
+            target_used[targets_positions.index(closest_target)] = True
+            offsets.append(closest_target)
+
+        return offsets
 
 uris = [
     'radio://0/80/2M/E7E7E7E7E7',
