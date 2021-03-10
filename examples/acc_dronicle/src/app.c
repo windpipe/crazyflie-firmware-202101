@@ -46,9 +46,10 @@ static bool takeOffWhenReady = false;
 static float goToInitialPositionWhenReady = -1.0f;
 static bool terminateTrajectoryAndLand = false;
 
-static float trajecory_center_offset_x = 0.0f;
-static float trajecory_center_offset_y = 0.0f;
-static float trajecory_center_offset_z = 0.0f;
+//static float trajecory_center_offset_x = 0.0f;
+//static float trajecory_center_offset_y = 0.0f;
+//static float trajecory_center_offset_z = 0.0f;
+static uint8_t dronicle_index = 0;          // 0 is default, and not addressed. windpipe
 
 void appMain()
 {
@@ -60,20 +61,20 @@ void appMain()
   }
 }
 
-PARAM_GROUP_START(dronicle)
+PARAM_GROUP_START(app)
   PARAM_ADD(PARAM_UINT8, takeoff, &takeOffWhenReady)
   PARAM_ADD(PARAM_FLOAT, start, &goToInitialPositionWhenReady)
   PARAM_ADD(PARAM_UINT8, stop, &terminateTrajectoryAndLand)
-  PARAM_ADD(PARAM_FLOAT, offsx, &trajecory_center_offset_x)
-  PARAM_ADD(PARAM_FLOAT, offsy, &trajecory_center_offset_y)
-  PARAM_ADD(PARAM_FLOAT, offsz, &trajecory_center_offset_z)
+//  PARAM_ADD(PARAM_FLOAT, offsx, &trajecory_center_offset_x)
+//  PARAM_ADD(PARAM_FLOAT, offsy, &trajecory_center_offset_y)
+//  PARAM_ADD(PARAM_FLOAT, offsz, &trajecory_center_offset_z)
   PARAM_ADD(PARAM_UINT8, dindex, &dronicle_index )          // windpipe.
   //PARAM_ADD(PARAM_UINT8, trajcount, &trajectoryCount)
-PARAM_GROUP_STOP(dronicle)
+PARAM_GROUP_STOP(app)
 
-LOG_GROUP_START(dronicle)
+LOG_GROUP_START(app)
   LOG_ADD(LOG_UINT8, state, &state)
-  LOG_ADD(LOG_FLOAT, prgr, &currentProgressInTrajectory)
+  //LOG_ADD(LOG_FLOAT, prgr, &currentProgressInTrajectory)
   LOG_ADD(LOG_UINT32, uptime, &now)
   LOG_ADD(LOG_UINT32, flighttime, &flightTime)
-LOG_GROUP_STOP(dronicle)
+LOG_GROUP_STOP(app)
