@@ -40,7 +40,7 @@
 
 #include "debug.h"
 
-#define DEBUG_MODULE "DRONICLE"
+#define DEBUG_MODULE "APP"
 
 static bool takeOffWhenReady = false;
 static float goToInitialPositionWhenReady = -1.0f;
