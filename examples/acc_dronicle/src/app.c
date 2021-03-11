@@ -224,6 +224,27 @@ static void defineLedSequence() {
   ledseqRegisterSequence(&seq_lock);
 }
 
+static uint32_t dronicleSequenceTime;
+static uint8_t dronicleID;
+
+static void dronicleStart(uint8_t dronicleID)
+{
+
+}
+static void dronicleStop(uint8_t dronicleID)
+{
+
+}
+static void dronicleSequence(uint8_t dronicleID, float time)
+{
+    //
+}
+
+static bool dronicleSequenceFinished{
+
+    return false;
+}
+
 void appMain() {
   if (isInit) {
     return;
@@ -284,7 +305,8 @@ static void appTimer(xTimerHandle timer) {
       state = STATE_WAIT_FOR_POSITION_LOCK;
       break;
     case STATE_WAIT_FOR_POSITION_LOCK:
-      if (hasLock()) {
+      //if (hasLock()) // 테스트를 위해 일단 칼만필터 안정화는 미루자.
+      {
         DEBUG_PRINT("Position lock acquired, ready for take off..\n");
         ledseqRun(&seq_lock);
         state = STATE_WAIT_FOR_TAKE_OFF;
@@ -292,22 +314,25 @@ static void appTimer(xTimerHandle timer) {
       break;
     case STATE_WAIT_FOR_TAKE_OFF:
       trajectoryStartTime = 0;
-      if (takeOffWhenReady) {
+      if (takeOffWhenReady) {                   // 'takeoff' signal from controller.
         takeOffWhenReady = false;
         DEBUG_PRINT("Taking off!\n");
 
-        padX = getX();
-        padY = getY();
-        padZ = getZ();
-        DEBUG_PRINT("Base position: (%f, %f, %f)\n", (double)padX, (double)padY, (double)padZ);
+//        padX = getX();
+//        padY = getY();
+//        padZ = getZ();
+//        DEBUG_PRINT("Base position: (%f, %f, %f)\n", (double)padX, (double)padY, (double)padZ);
 
         terminateTrajectoryAndLand = false;
-        crtpCommanderHighLevelTakeoff(padZ + TAKE_OFF_HEIGHT, 1.0);
+        ////crtpCommanderHighLevelTakeoff(padZ + TAKE_OFF_HEIGHT, 1.0);
+        // 테스트를 위채서 일단 이륙보다는 LED 시그널로 대치.
         state = STATE_TAKING_OFF;
       }
       break;
     case STATE_TAKING_OFF:
-      if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      if ( dronicleSequenceFinished())
+      //if (crtpCommanderHighLevelIsTrajectoryFinished())         // 테스트용 함수로 대체할 것. 시퀀스 종료의 의미.
+      {                                                         // 처음 시작할때는 당연히 여기 안걸리고 패싱됨. 그리고 그냥 있음.
         DEBUG_PRINT("Hovering, waiting for command to start\n");
         ledseqStop(&seq_lock);
         state = STATE_HOVERING;
@@ -316,23 +341,23 @@ static void appTimer(xTimerHandle timer) {
       flightTime += delta;
       break;
     case STATE_HOVERING:
-      if (terminateTrajectoryAndLand) {
+      if (terminateTrajectoryAndLand) {                         // stop 사인임.
           terminateTrajectoryAndLand = false;
           DEBUG_PRINT("Terminating hovering\n");
           state = STATE_GOING_TO_PAD;
       } else {
-        if (goToInitialPositionWhenReady >= 0.0f) {
+        if (goToInitialPositionWhenReady >= 0.0f) {             // start 사인임
           float delayMs = goToInitialPositionWhenReady * trajectoryDurationMs;
           timeWhenToGoToInitialPosition = now + delayMs;
           trajectoryStartTime = now + delayMs;
           goToInitialPositionWhenReady = -1.0f;
           DEBUG_PRINT("Waiting to go to initial position for %d ms\n", (int)delayMs);
-          state = STATE_WAITING_TO_GO_TO_INITIAL_POSITION;
+          state = STATE_WAITING_TO_GO_TO_INITIAL_POSITION;      // start니까 초기자리로 일단 가라.
         }
       }
       flightTime += delta;
       break;
-    case STATE_WAITING_TO_GO_TO_INITIAL_POSITION:
+    case STATE_WAITING_TO_GO_TO_INITIAL_POSITION:               // 초기 자리에 가서, 현재 시퀀스에 맞는 자기 순서자리를 찾아가라.
       if (now >= timeWhenToGoToInitialPosition) {
         DEBUG_PRINT("Going to initial position\n");
         crtpCommanderHighLevelGoTo(sequence[0].p[0][0] + trajecory_center_offset_x, sequence[0].p[1][0] + trajecory_center_offset_y, sequence[0].p[2][0] + trajecory_center_offset_z, sequence[0].p[3][0], DURATION_TO_INITIAL_POSITION, false);
@@ -340,21 +365,21 @@ static void appTimer(xTimerHandle timer) {
       }
       flightTime += delta;
       break;
-    case STATE_GOING_TO_INITIAL_POSITION:
+    case STATE_GOING_TO_INITIAL_POSITION:                       // 자기 자리를 찾고 있는....
       currentProgressInTrajectory = (now - trajectoryStartTime) / trajectoryDurationMs;
 
-      if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      if (crtpCommanderHighLevelIsTrajectoryFinished()) {       // finished면, 현재 트래젝터리 가동중이지 않고 초기 자리이니까
         DEBUG_PRINT("At initial position, starting trajectory...\n");
-        crtpCommanderHighLevelStartTrajectory(trajectoryId, SEQUENCE_SPEED, true, false);
+        crtpCommanderHighLevelStartTrajectory(trajectoryId, SEQUENCE_SPEED, true, false); // 트래젝터리 시작해라.
         remainingTrajectories = trajectoryCount - 1;
         state = STATE_RUNNING_TRAJECTORY;
       }
       flightTime += delta;
       break;
-    case STATE_RUNNING_TRAJECTORY:
+    case STATE_RUNNING_TRAJECTORY:                              // 트래젝터리 가동중.
       currentProgressInTrajectory = (now - trajectoryStartTime) / trajectoryDurationMs;
 
-      if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+      if (crtpCommanderHighLevelIsTrajectoryFinished()) {       // 끝났고, 회수남은게 없으면 랜딩해라.
         if (terminateTrajectoryAndLand || (remainingTrajectories == 0)) {
           terminateTrajectoryAndLand = false;
           DEBUG_PRINT("Terminating trajectory, going to pad...\n");
@@ -362,7 +387,7 @@ static void appTimer(xTimerHandle timer) {
           crtpCommanderHighLevelGoTo(padX, padY, padZ + LANDING_HEIGHT, 0.0, timeToPadPosition, false);
           currentProgressInTrajectory = NO_PROGRESS;
           state = STATE_GOING_TO_PAD;
-        } else {
+        } else {                                                // 끝났지만 횟수가 남으면 다시 시작
           if (remainingTrajectories > 0) {
             DEBUG_PRINT("Trajectory finished, restarting...\n");
             crtpCommanderHighLevelStartTrajectory(trajectoryId, SEQUENCE_SPEED, true, false);
@@ -372,7 +397,7 @@ static void appTimer(xTimerHandle timer) {
       }
       flightTime += delta;
       break;
-    case STATE_GOING_TO_PAD:
+    case STATE_GOING_TO_PAD:                                    //
       if (crtpCommanderHighLevelIsTrajectoryFinished()) {
         DEBUG_PRINT("Over pad, stabalizing position\n");
         stabilizeEndTime = now + 5000;
@@ -380,7 +405,7 @@ static void appTimer(xTimerHandle timer) {
       }
       flightTime += delta;
       break;
-    case STATE_WAITING_AT_PAD:
+    case STATE_WAITING_AT_PAD:                                  // 랜딩해라
       if (now > stabilizeEndTime || ((fabs(padX - getX()) < MAX_PAD_ERR) && (fabs(padY - getY()) < MAX_PAD_ERR))) {
         if (now > stabilizeEndTime) {
           DEBUG_PRINT("Warning: timeout!\n");
@@ -397,11 +422,11 @@ static void appTimer(xTimerHandle timer) {
         DEBUG_PRINT("Landed. Feed me!\n");
         crtpCommanderHighLevelStop();
         landingTimeCheckCharge = now + 3000;
-        state = STATE_CHECK_CHARGING;
+        ////state = STATE_CHECK_CHARGING;                       // 착륙후 충전.
       }
       flightTime += delta;
       break;
-    case STATE_CHECK_CHARGING:
+    case STATE_CHECK_CHARGING:                                  // 충전중.
       if (now > landingTimeCheckCharge) {
         DEBUG_PRINT("isCharging: %d\n", isCharging());
         if (isCharging()) {

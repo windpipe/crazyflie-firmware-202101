@@ -284,19 +284,20 @@ static void appTimer(xTimerHandle timer) {
       state = STATE_WAIT_FOR_POSITION_LOCK;
       break;
     case STATE_WAIT_FOR_POSITION_LOCK:
-      if (hasLock()) {
-        DEBUG_PRINT("Position lock acquired, ready for take off..\n");
-        ledseqRun(&seq_lock);
-        state = STATE_WAIT_FOR_TAKE_OFF;
-      }
+//      if (hasLock()) {
+//        DEBUG_PRINT("Position lock acquired, ready for take off..\n");
+//        ledseqRun(&seq_lock);
+//        state = STATE_WAIT_FOR_TAKE_OFF;
+//      }
+            state = STATE_WAIT_FOR_TAKE_OFF; // 임시로...
       break;
     case STATE_WAIT_FOR_TAKE_OFF:
       trajectoryStartTime = 0;
-      if (takeOffWhenReady) {
+      if (takeOffWhenReady) {                   // 여기에 start 신호 ON
         takeOffWhenReady = false;
         DEBUG_PRINT("Taking off!\n");
 
-        padX = getX();
+        padX = getX();                          // 현재의 x,y,z 가 패드 좌표임.
         padY = getY();
         padZ = getZ();
         DEBUG_PRINT("Base position: (%f, %f, %f)\n", (double)padX, (double)padY, (double)padZ);
