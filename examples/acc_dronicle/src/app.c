@@ -224,18 +224,18 @@ static void defineLedSequence() {
   ledseqRegisterSequence(&seq_lock);
 }
 
-static uint32_t dronicleSequenceTime;
+static uint32_t dronicleStartTimeTick; // 1/1000 sec
 static uint8_t dronicleID;
 
-static void dronicleStart(uint8_t dronicleID)
+static void dronicleStart(uint32_t startTick)
 {
 
 }
-static void dronicleStop(uint8_t dronicleID)
+static void dronicleStop()
 {
 
 }
-static void dronicleSequence(uint8_t dronicleID, float time)
+static void dronicleSequence(uint8_t dronicleID, uint32_t timeTick)
 {
     //
 }
