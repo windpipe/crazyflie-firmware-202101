@@ -240,7 +240,8 @@ static void dronicleSequence(uint8_t dronicleID, uint32_t timeTick)
     //
 }
 
-static bool dronicleSequenceFinished{
+static bool dronicleSequenceFinished()
+{
 
     return false;
 }
