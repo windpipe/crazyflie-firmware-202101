@@ -240,11 +240,11 @@ static uint8_t dronicleID;
 //    //
 //}
 //
-//static bool dronicleSequenceFinished()
-//{
-//
-//    return false;
-//}
+static bool dronicleSequenceFinished()
+{
+
+    return false;
+}
 
 void appMain() {
   if (isInit) {
