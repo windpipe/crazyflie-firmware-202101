@@ -227,24 +227,24 @@ static void defineLedSequence() {
 static uint32_t dronicleStartTimeTick; // 1/1000 sec
 static uint8_t dronicleID;
 
-static void dronicleStart(uint32_t startTick)
-{
-
-}
-static void dronicleStop()
-{
-
-}
-static void dronicleSequence(uint8_t dronicleID, uint32_t timeTick)
-{
-    //
-}
-
-static bool dronicleSequenceFinished()
-{
-
-    return false;
-}
+//static void dronicleStart(uint32_t startTick)
+//{
+//
+//}
+//static void dronicleStop()
+//{
+//
+//}
+//static void dronicleSequence(uint8_t dronicleID, uint32_t timeTick)
+//{
+//    //
+//}
+//
+//static bool dronicleSequenceFinished()
+//{
+//
+//    return false;
+//}
 
 void appMain() {
   if (isInit) {
